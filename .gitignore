@@ -40,3 +40,6 @@ judge-tmp/
 terraform.tfstate
 terraform.tfstate.*
 .terraform.lock.hcl
+
+# TypeScript build metadata
+*.tsbuildinfo
