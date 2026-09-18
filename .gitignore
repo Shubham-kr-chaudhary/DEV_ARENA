@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.next/
+dist/
+build/
+coverage/
+.turbo/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Test / tooling
+playwright-report/
+test-results/
+
+# Judge artifacts
+judge-tmp/
+*.exe
+*.out
+*.class
+
+# Local infrastructure
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+.terraform.lock.hcl

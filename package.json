@@ -1,0 +1,22 @@
+{
+  "name": "devarena",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @devarena/web --filter @devarena/api --filter @devarena/judge-worker dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate:foundation": "node scripts/validate-foundation.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}
