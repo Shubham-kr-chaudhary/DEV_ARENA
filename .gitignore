@@ -43,3 +43,6 @@ terraform.tfstate.*
 
 # TypeScript build metadata
 *.tsbuildinfo
+
+# Prisma generated client
+apps/api/src/generated/

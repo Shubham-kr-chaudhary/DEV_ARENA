@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: devarena-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devarena
+      POSTGRES_PASSWORD: devarena
+      POSTGRES_DB: devarena
+    ports:
+      - '5432:5432'
+    volumes:
+      - devarena-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U devarena -d devarena']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  devarena-postgres-data:
