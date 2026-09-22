@@ -34,3 +34,9 @@ Server-only dependencies must never be imported into browser bundles.
 3. Shared packages contain no secrets or server credentials.
 4. Strict TypeScript is enabled.
 5. Each deployable application has its own build boundary.
+
+## Phase 2 database boundary
+
+PostgreSQL is the system of record. Prisma ORM 7 is used only by `apps/api`. The generated Prisma Client is treated as a build artifact and is not committed; CI generates it before typechecking.
+
+The database layer exposes a small server-only boundary under `apps/api/src/db`. Future services should receive database access through this boundary rather than constructing independent clients.

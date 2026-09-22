@@ -59,3 +59,26 @@ feat: initialize monorepo
 feat: add authentication
 feat: add submission service
 ```
+
+## Database development (Phase 2)
+
+Start PostgreSQL locally:
+
+```bash
+docker compose -f infra/local/postgres/compose.yml up -d
+```
+
+Then generate the Prisma Client and create the initial development migration:
+
+```bash
+pnpm db:generate
+pnpm db:migrate
+```
+
+For schema-only validation:
+
+```bash
+pnpm db:validate
+```
+
+Never commit `.env` or production database credentials.

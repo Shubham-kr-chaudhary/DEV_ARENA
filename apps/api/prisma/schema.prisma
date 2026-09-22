@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ProblemStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SubmissionStatus {
+  QUEUED
+  RUNNING
+  ACCEPTED
+  WRONG_ANSWER
+  RUNTIME_ERROR
+  COMPILE_ERROR
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  OUTPUT_LIMIT_EXCEEDED
+  SYSTEM_ERROR
+  CANCELLED
+}
+
+enum SubmissionSource {
+  RUN
+  SUBMIT
+}
+
+enum ContestStatus {
+  DRAFT
+  UPCOMING
+  LIVE
+  FINISHED
+  CANCELLED
+}
+
+model User {
+  id                String              @id @default(uuid()) @db.Uuid
+  email             String              @unique @db.VarChar(320)
+  role              Role                @default(USER)
+  status            UserStatus          @default(ACTIVE)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  profile           Profile?
+  submissions       Submission[]
+  contestParticipants ContestParticipant[]
+  ratingHistory     RatingHistory[]
+  problemProgress   UserProblemProgress[]
+  auditLogs         AuditLog[]          @relation("AuditActor")
+
+  @@index([status, createdAt])
+  @@index([role])
+}
+
+model Profile {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @db.Uuid
+  username    String   @unique @db.VarChar(32)
+  displayName String?  @db.VarChar(80)
+  bio         String?  @db.VarChar(500)
+  avatarUrl   String?  @db.VarChar(2048)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([displayName])
+}
+
+model Problem {
+  id               String                @id @default(uuid()) @db.Uuid
+  slug             String                @unique @db.VarChar(120)
+  title            String                @db.VarChar(200)
+  statement        String
+  inputFormat      String
+  outputFormat     String
+  constraints      String?
+  explanation      String?
+  difficulty       Difficulty
+  status           ProblemStatus         @default(DRAFT)
+  timeLimitMs      Int                   @default(2000)
+  memoryLimitMb    Int                   @default(256)
+  outputLimitBytes Int                   @default(1048576)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  publishedAt      DateTime?
+  tags             ProblemTag[]
+  testCases        TestCase[]
+  submissions      Submission[]
+  contestProblems  ContestProblem[]
+  progress         UserProblemProgress[]
+
+  @@index([status, difficulty, createdAt])
+  @@index([difficulty, status])
+}
+
+model Tag {
+  id        String       @id @default(uuid()) @db.Uuid
+  slug      String       @unique @db.VarChar(80)
+  name      String       @unique @db.VarChar(80)
+  createdAt DateTime     @default(now())
+  problems  ProblemTag[]
+}
+
+model ProblemTag {
+  problemId String  @db.Uuid
+  tagId     String  @db.Uuid
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, tagId])
+  @@index([tagId, problemId])
+}
+
+model TestCase {
+  id               String   @id @default(uuid()) @db.Uuid
+  problemId        String   @db.Uuid
+  sequence         Int
+  input            String
+  expectedOutput   String
+  isPublic         Boolean  @default(false)
+  createdAt        DateTime              @default(now())
+  problem          Problem               @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  results          SubmissionTestResult[]
+
+  @@unique([problemId, sequence])
+  @@index([problemId, isPublic, sequence])
+}
+
+model Language {
+  id          String       @id @default(uuid()) @db.Uuid
+  slug        String       @unique @db.VarChar(40)
+  name        String       @db.VarChar(80)
+  version     String       @db.VarChar(80)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  submissions Submission[]
+
+  @@index([isActive, name])
+}
+
+model Submission {
+  id            String                @id @default(uuid()) @db.Uuid
+  userId        String                @db.Uuid
+  problemId     String                @db.Uuid
+  languageId    String                @db.Uuid
+  sourceCode    String
+  status        SubmissionStatus      @default(QUEUED)
+  source        SubmissionSource      @default(SUBMIT)
+  score         Int                   @default(0)
+  passedTests   Int                   @default(0)
+  totalTests    Int                   @default(0)
+  executionTimeMs Int?
+  memoryUsedKb  Int?
+  errorMessage  String?
+  queuedAt      DateTime              @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime              @default(now())
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  problem       Problem               @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  language      Language              @relation(fields: [languageId], references: [id], onDelete: Restrict)
+  testResults   SubmissionTestResult[]
+
+  @@index([userId, createdAt])
+  @@index([problemId, createdAt])
+  @@index([status, createdAt])
+  @@index([userId, problemId, createdAt])
+}
+
+model SubmissionTestResult {
+  id               String           @id @default(uuid()) @db.Uuid
+  submissionId     String           @db.Uuid
+  testCaseId       String           @db.Uuid
+  status           SubmissionStatus
+  executionTimeMs  Int?
+  memoryUsedKb     Int?
+  actualOutput     String?
+  errorMessage     String?
+  createdAt        DateTime         @default(now())
+  submission       Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCase         TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
+
+  @@unique([submissionId, testCaseId])
+  @@index([submissionId, createdAt])
+  @@index([testCaseId])
+}
+
+model Contest {
+  id          String               @id @default(uuid()) @db.Uuid
+  slug        String               @unique @db.VarChar(120)
+  title       String               @db.VarChar(200)
+  description String?
+  status      ContestStatus        @default(DRAFT)
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  problems    ContestProblem[]
+  participants ContestParticipant[]
+  ratingHistory RatingHistory[]
+
+  @@index([status, startsAt])
+  @@index([startsAt, endsAt])
+}
+
+model ContestProblem {
+  contestId String  @db.Uuid
+  problemId String  @db.Uuid
+  order     Int
+  points    Int     @default(100)
+  contest   Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+
+  @@id([contestId, problemId])
+  @@unique([contestId, order])
+  @@index([problemId, contestId])
+}
+
+model ContestParticipant {
+  contestId    String   @db.Uuid
+  userId       String   @db.Uuid
+  registeredAt DateTime @default(now())
+  finalScore   Int      @default(0)
+  rank         Int?
+  contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([contestId, userId])
+  @@index([contestId, rank])
+  @@index([userId, registeredAt])
+}
+
+model RatingHistory {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  contestId String?  @db.Uuid
+  rating    Int
+  delta     Int
+  reason    String   @db.VarChar(120)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contest   Contest? @relation(fields: [contestId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model UserProblemProgress {
+  userId       String   @db.Uuid
+  problemId    String   @db.Uuid
+  solved       Boolean  @default(false)
+  attempts     Int      @default(0)
+  firstSolvedAt DateTime?
+  lastAttemptAt DateTime?
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem      Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, problemId])
+  @@index([problemId, solved])
+  @@index([userId, solved])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorUserId String? @db.Uuid
+  action     String   @db.VarChar(120)
+  entityType String   @db.VarChar(80)
+  entityId   String?  @db.VarChar(120)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+}
