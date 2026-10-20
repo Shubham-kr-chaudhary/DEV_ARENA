@@ -1,42 +1,69 @@
 # DevArena Architecture
 
-## Phase 1 foundation
+## 1. System Overview
 
-DevArena is a pnpm monorepo containing independently deployable applications and shared contracts.
+DevArena is a competitive programming platform architected around six strictly separated concerns:
+
+1. **Presentation (`apps/web`)**: Next.js 16 App Router serving server-rendered public pages and a client-heavy Coding Arena.
+2. **Application & API (`apps/api`)**: Stateless Hono HTTP server handling authentication, authorization, input validation, rate limiting, and domain orchestration.
+3. **Persistent Data (`PostgreSQL`)**: Authoritative relational datastore managed via Prisma ORM 7 (`@prisma/adapter-pg`).
+4. **Asynchronous Queueing (`Amazon SQS`)**: Decouples submission and sample-run requests from code execution, providing retry management and dead-letter isolation.
+5. **Judge Orchestration (`apps/judge-worker`)**: Independently scalable worker service that polls SQS, orchestrates compilation and test execution, compares outputs deterministically, and persists verdicts idempotently.
+6. **Isolated Execution Sandbox**: Ephemeral, unprivileged, network-isolated Linux sandbox (`nsjail` / `bubblewrap` + cgroups v2 + seccomp-BPF on AWS Bottlerocket) where hostile user code is compiled and executed.
 
 ```mermaid
-flowchart LR
-    Browser --> Web[Next.js Web]
-    Web --> API[Hono API]
-    API --> DB[(PostgreSQL)]
-    API --> Queue[SQS]
-    Queue --> Worker[Judge Worker]
-    Worker --> Sandbox[Isolated Runner]
+flowchart TB
+    subgraph Presentation["Presentation Layer"]
+        Browser["Developer / Admin Browser"]
+        Web["apps/web (Next.js 16 App Router)"]
+    end
+
+    subgraph Application["Application & API Layer"]
+        API["apps/api (Hono + Node.js 22)<br/>Auth, RBAC, Validation, Domain Services"]
+    end
+
+    subgraph DataAndMessaging["Persistence & Messaging Layer"]
+        DB[("PostgreSQL 17<br/>Authoritative Store")]
+        S3[("Amazon S3<br/>Avatars & Assets")]
+        SQS["Amazon SQS<br/>Run & Submission Queues"]
+        DLQ["Amazon SQS DLQ<br/>Poison Job Isolation"]
+    end
+
+    subgraph JudgeSubsystem["Judge Execution Subsystem"]
+        Worker["apps/judge-worker<br/>Job Consumer & Output Comparator"]
+        Sandbox["Ephemeral Sandbox<br/>Non-root, Network=None, Cgroups v2, Seccomp"]
+    end
+
+    Browser <-->|"HTTPS / Cookies"| Web
+    Browser <-->|"HTTPS /api/v1/*"| API
+    Web -->|"SSR Fetch"| API
+    API <-->|"Prisma 7"| DB
+    API <-->|"Presigned Access"| S3
+    API -->|"Enqueue Job"| SQS
+    SQS -.->|"Max Retries Exceeded"| DLQ
+    SQS -->|"Long Polling"| Worker
+    Worker <-->|"Read Tests / Persist Verdicts"| DB
+    Worker -->|"Spawn Isolated Process Tree"| Sandbox
 ```
 
-Phase 1 implements only the application shells. PostgreSQL, SQS, and sandbox execution are deliberately deferred.
+## 2. Workspace Boundaries
 
-## Boundaries
+| Workspace Package        | Responsibility                                                              | Allowed Internal Imports                                          | Forbidden Imports                                                |
+| :----------------------- | :-------------------------------------------------------------------------- | :---------------------------------------------------------------- | :--------------------------------------------------------------- |
+| `apps/web`               | Browser UI, SSR pages, Coding Arena                                         | `@devarena/api-contracts`, `@devarena/shared`                     | `@devarena/config`, `@prisma/client`, `pg`, Node `child_process` |
+| `apps/api`               | HTTP transport, auth, RBAC, domain services, Prisma DB access, SQS producer | `@devarena/api-contracts`, `@devarena/config`, `@devarena/shared` | `apps/web`, `apps/judge-worker`, `child_process` for user code   |
+| `apps/judge-worker`      | SQS consumer, language runners, sandbox orchestration, output comparison    | `@devarena/api-contracts`, `@devarena/config`, `@devarena/shared` | `apps/web`, HTTP route controllers                               |
+| `packages/api-contracts` | Browser-safe Zod request/response schemas and DTO types                     | `@devarena/shared`                                                | `@devarena/config`, Prisma, Node-only modules, secrets           |
+| `packages/config`        | Server and worker environment variable validation                           | `@devarena/shared`                                                | Browser modules                                                  |
+| `packages/shared`        | Zero-dependency domain constants, enums, and pure TypeScript types          | None                                                              | All external runtime packages                                    |
 
-- `apps/web`: browser-facing presentation and interaction.
-- `apps/api`: HTTP transport, future authentication, validation and domain services.
-- `apps/judge-worker`: asynchronous execution worker; no HTTP responsibility.
-- `packages/api-contracts`: environment-neutral API DTOs/schemas.
-- `packages/config`: server-side configuration validation.
-- `packages/shared`: environment-neutral shared primitives.
+## 3. Non-Negotiable Architectural Invariants
 
-Server-only dependencies must never be imported into browser bundles.
-
-## Phase 1 invariants
-
-1. No submitted source code is executed by the API.
-2. No production data is hardcoded into frontend code.
-3. Shared packages contain no secrets or server credentials.
-4. Strict TypeScript is enabled.
-5. Each deployable application has its own build boundary.
-
-## Phase 2 database boundary
-
-PostgreSQL is the system of record. Prisma ORM 7 is used only by `apps/api`. The generated Prisma Client is treated as a build artifact and is not committed; CI generates it before typechecking.
-
-The database layer exposes a small server-only boundary under `apps/api/src/db`. Future services should receive database access through this boundary rather than constructing independent clients.
+1. **Zero API Code Execution**: `apps/api` must never compile or execute user-submitted code (`child_process.exec`, `eval`, `vm`, or shell interpolation are strictly prohibited).
+2. **Authoritative Deterministic Judge**: Only `apps/judge-worker` can transition a submission to a terminal verdict (`ACCEPTED`, `WRONG_ANSWER`, etc.) based on deterministic test execution. AI features (Phase 14) are advisory only and never judge code.
+3. **Hidden Test Case Opacity**: Hidden test cases (`isPublic = false`) are never returned by public problem endpoints or exposed in user-visible `SubmissionTestResult` payloads.
+4. **Server-Trusted Configuration**: Language compile/run commands, time limits, memory limits, contest windows, user roles, and ratings are resolved exclusively on the server.
+5. **Genuine Health & Readiness**:
+   - `GET /health` verifies process liveness (`200 OK`).
+   - `GET /ready` actively verifies downstream dependencies (`SELECT 1` against PostgreSQL) and returns `503 Service Unavailable` when dependencies are unreachable.
+   - Graceful shutdown handlers (`SIGTERM`, `SIGINT`) stop accepting new requests/jobs and cleanly close database connections before exiting.
