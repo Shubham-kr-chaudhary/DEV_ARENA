@@ -1,34 +1,45 @@
 # Phase 2 Validation
 
-## Scope
+## Scope Implemented in Phase 2
 
-Phase 2 establishes PostgreSQL/Prisma tooling, the initial domain schema, the API-side Prisma client boundary, and local PostgreSQL development infrastructure.
+Phase 2 completes the PostgreSQL / Prisma 7 database schema reconciliation, incremental SQL migration, idempotent development seed script, and server-only repository layer:
 
-## Validation performed during generation
+1. **Reconciled Prisma Schema (`apps/api/prisma/schema.prisma`)**:
+   - Added `User.passwordHash`, `Session`, and `OAuthAccount` (`OAuthProvider`: `GITHUB`, `GOOGLE`).
+   - Added `Profile` rating (`rating`, `maxRating`, `rankTitle`) and statistics (`solvedCount`, `attemptedCount`, `contestCount`) with composite leaderboard indexes.
+   - Added `ProblemStatus.REVIEW`, `ComparisonMode`, and `Problem` metadata (`examples`, `editorial`, `authorId`, `sourceSizeLimitBytes`, `comparisonMode`, `floatTolerance`).
+   - Added `TestCase` metadata (`explanation`, `weight`, `group`, `updatedAt`).
+   - Aligned `SubmissionStatus` to canonical specification verdicts (`COMPILATION_ERROR`, `INTERNAL_ERROR`, etc.) and added `Submission` execution context (`mode`, `contestId`, `idempotencyKey`, `judgeJobId`, `judgeAttempts`, `updatedAt`).
+   - Aligned `ContestStatus` (`DRAFT`, `UPCOMING`, `RUNNING`, `ENDED`, `CANCELLED`) and added `ContestParticipant` scoring fields (`penaltyMinutes`, `solvedCount`, `lastAcceptedAt`).
+   - Added `bestRuntimeMs`, `bestMemoryKb`, and `bestSubmissionId` to `UserProblemProgress`.
+2. **Safe Incremental Migration (`20261017000000_phase2_schema_reconciliation`)**:
+   - Preserved `20260922145432_init/migration.sql` unchanged.
+   - Upgraded enums, tables, indexes, and foreign keys non-destructively with lossless `CASE` mapping for legacy enum values.
+3. **Development Seed Script (`apps/api/prisma/seed.ts`)**:
+   - Idempotent `upsert`-based seeding for development users (`dev_admin`, `alice_dev`, `bob_dev`), languages (`cpp`, `javascript`), 10 tags, and 4 sample problems with public and hidden test cases.
+4. **Repository Layer (`apps/api/src/repositories/`)**:
+   - Implemented `UserRepository`, `ProblemRepository`, `SubmissionRepository`, `ContestRepository`, `LeaderboardRepository`, and `AuditRepository` with unit tests in `apps/api/tests/repositories.test.ts` and `apps/api/tests/seed.test.ts`.
 
-The Phase 2 source and configuration were reviewed structurally. The current execution environment does not provide Docker or registry access, so Prisma packages could not be installed/generated and a live PostgreSQL migration could not be executed here.
+## Local Validation Commands
 
-The repository must therefore complete the runtime database validation locally after dependency installation:
-
-```bash
-pnpm install
-pnpm --filter @devarena/api prisma:generate
-pnpm --filter @devarena/api prisma:migrate
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm format:check
-```
-
-If Docker is available, start PostgreSQL first:
+Start PostgreSQL 17 locally with Docker Compose:
 
 ```bash
 docker compose -f infra/local/postgres/compose.yml up -d
 ```
 
-If Docker is unavailable, use a local PostgreSQL installation with the same `DATABASE_URL` shape.
+Run the full Phase 2 verification suite:
 
-## Important limitation
-
-Do not consider Phase 2 migration validation complete until `prisma migrate` succeeds against PostgreSQL and the generated client passes the repository validation commands above.
+```bash
+pnpm install --frozen-lockfile
+pnpm validate:foundation
+pnpm db:generate
+pnpm db:validate
+pnpm db:migrate
+pnpm db:seed
+pnpm format:check
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```

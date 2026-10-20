@@ -1,21 +1,32 @@
-# Rendering Strategy
+# Frontend Rendering & Performance Strategy
 
-Phase 1 establishes the frontend boundary; product routes are not implemented yet.
+## 1. Guiding Principles
 
-Planned route strategy:
+DevArena uses the **Next.js 16 App Router** (`apps/web/app`) with React 19 Server Components by default, introducing Client Components (`'use client'`) only where browser interactivity, local state, or Monaco Editor integration is required.
 
-| Route                    | Planned strategy                            |
-| ------------------------ | ------------------------------------------- |
-| `/`                      | Static/server rendered                      |
-| `/problems`              | Server rendered with client filter controls |
-| `/problems/[slug]`       | Server rendered/dynamic                     |
-| `/arena/[problemSlug]`   | Server shell + client-heavy Arena           |
-| `/users/[username]`      | Server rendered/dynamic                     |
-| `/me/submissions`        | Authenticated dynamic                       |
-| `/leaderboard`           | Server rendered with controlled refresh     |
-| `/contests`              | Server rendered                             |
-| `/contests/[slug]`       | Server rendered                             |
-| `/contests/[slug]/arena` | Server shell + client-heavy interaction     |
-| `/admin/*`               | Authenticated dynamic/client-heavy          |
+- **Never Load Monaco on Public Routes**: `@monaco-editor/react` and `monaco-editor` are dynamically imported with `ssr: false` exclusively inside `/arena/[problemSlug]` and `/contests/[slug]/arena`.
+- **Server-First Public Content**: Marketing, catalogue, problem statements, leaderboards, and public profiles render on the server for fast First Contentful Paint (FCP), low Time to First Byte (TTFB), and search engine indexing.
+- **No Uncached Private Data**: Authenticated user views (`/me/submissions`, `/admin/*`, active contest arenas) use `Cache-Control: no-store`.
 
-Monaco will be dynamically loaded only by Arena routes. It will not be part of public-route initial loading.
+## 2. Route-by-Route Rendering Matrix
+
+| Route                    | Rendering Mode                                                              | Data Source                                                                                 | Caching Strategy                                                                                     | Auth Requirement                                   | Why This Strategy Was Chosen                                                                                    |
+| :----------------------- | :-------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------- | :------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
+| `/`                      | Static / Server Component (SSG + ISR)                                       | Build-time static content + optional summary stats                                          | `revalidate: 300`                                                                                    | Public                                             | Zero client JS overhead for landing page visitors; instant LCP and SEO indexing.                                |
+| `/problems`              | Server Component initial render + Client filter controls                    | `GET /api/v1/problems`                                                                      | Public list cached (`60s`); personalized solve badges fetched dynamically when session cookie exists | Public (optional Auth)                             | Crawlable problem catalogue with fast initial paint and debounced client filtering.                             |
+| `/problems/[slug]`       | Dynamic Server Component (SSR)                                              | `GET /api/v1/problems/:slug`                                                                | Problem metadata cached (`60s`), invalidated on admin publish/update                                 | Public (`PUBLISHED` only)                          | Rich OpenGraph/SEO metadata per problem without downloading the Monaco Editor bundle.                           |
+| `/arena/[problemSlug]`   | Server Component shell + Client Coding Arena (`next/dynamic`, `ssr: false`) | Server fetches problem statement; Client runs TanStack Query for `/runs` and `/submissions` | `no-store` for execution and submission polling                                                      | Public to view editor; Auth required to Run/Submit | Isolates heavyweight code editor, split-pane layout, and polling state to the Arena route.                      |
+| `/users/[username]`      | Dynamic Server Component (SSR)                                              | `GET /api/v1/users/:username`                                                               | `revalidate: 30`                                                                                     | Public                                             | Shareable developer portfolio with server-rendered rating history and solve metrics.                            |
+| `/me/submissions`        | Authenticated Dynamic Server Component + Client pagination                  | `GET /api/v1/users/me/submissions`                                                          | `no-store`                                                                                           | Authenticated (`USER` / `ADMIN`)                   | Private user submission history and source code inspection must never be shared in caches.                      |
+| `/leaderboard`           | Server Component (SSR)                                                      | `GET /api/v1/leaderboard`                                                                   | `revalidate: 30`                                                                                     | Public                                             | Fast global standings backed by indexed `(rating DESC, solvedCount DESC)` queries.                              |
+| `/contests`              | Server Component (SSR)                                                      | `GET /api/v1/contests`                                                                      | `revalidate: 30`                                                                                     | Public                                             | SEO-friendly discovery of upcoming, live, and past contests.                                                    |
+| `/contests/[slug]`       | Dynamic Server Component (SSR)                                              | `GET /api/v1/contests/:slug`                                                                | `revalidate: 15`                                                                                     | Public (Auth to register)                          | Displays authoritative server-computed contest status and countdown.                                            |
+| `/contests/[slug]/arena` | Authenticated Server Gate + Client Contest Arena                            | Server verifies contest registration & active window; Client loads Monaco + live standings  | `no-store`                                                                                           | Registered Contest Participant                     | Prevents pre-contest problem leakage and isolates live contest timer/editor state.                              |
+| `/admin`, `/admin/*`     | Authenticated Server Gate (`ADMIN`) + Client CRUD forms                     | `/api/v1/admin/*`                                                                           | `no-store`                                                                                           | Authenticated (`ADMIN` only)                       | Enforces role check before rendering admin UI while supporting rich form validation with React Hook Form + Zod. |
+
+## 3. Frontend Performance Controls
+
+1. **Monaco Editor Lazy Loading**: Loaded via `next/dynamic(() => import('@/components/arena/CodeEditor'), { ssr: false, loading: () => <EditorSkeleton /> })`.
+2. **Per-Language Local Draft Persistence**: Editor changes are debounced (`250ms`) and persisted in `localStorage` under a composite key (`devarena:code:v1:<user>:<problemSlug>:<mode>:<languageSlug>`) so switching between C++ and JavaScript is instantaneous and lossless.
+3. **Controlled Polling**: Submission status polling (`GET /api/v1/submissions/:id`) runs at `1500ms` intervals while `status` is `QUEUED` or `RUNNING` and halts immediately once a terminal verdict is reached, invalidating user progress and submission history caches automatically.
+4. **Pagination & Debounced Search**: All catalogue, submission, and leaderboard views enforce bounded page sizes (`20–50` items) and `300ms` debounced search inputs with automatic `AbortController` request cancellation.

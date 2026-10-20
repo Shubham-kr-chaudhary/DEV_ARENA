@@ -6,15 +6,27 @@ export default function HomePage() {
         Competitive programming, built around a real judge.
       </h1>
       <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">
-        Phase 1 establishes the production-oriented application foundation. The deterministic
-        asynchronous judge will be introduced in later phases.
+        Practice algorithmic problems, test solutions in an isolated execution environment, and
+        track your competitive rating.
       </p>
-      <div className="mt-10 flex gap-4">
+      <div className="mt-10 flex flex-wrap gap-4">
         <a
           className="rounded-lg bg-white px-5 py-3 font-medium text-zinc-950 transition hover:bg-zinc-200"
           href="/problems"
         >
           Browse problems
+        </a>
+        <a
+          className="rounded-lg border border-zinc-700 px-5 py-3 font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-900"
+          href="/login"
+        >
+          Sign in
+        </a>
+        <a
+          className="rounded-lg border border-zinc-700 px-5 py-3 font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-900"
+          href="/register"
+        >
+          Create account
         </a>
       </div>
     </main>
