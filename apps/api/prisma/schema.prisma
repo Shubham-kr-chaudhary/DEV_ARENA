@@ -18,8 +18,14 @@ enum UserStatus {
   DELETED
 }
 
+enum OAuthProvider {
+  GITHUB
+  GOOGLE
+}
+
 enum ProblemStatus {
   DRAFT
+  REVIEW
   PUBLISHED
   ARCHIVED
 }
@@ -30,17 +36,25 @@ enum Difficulty {
   HARD
 }
 
+enum ComparisonMode {
+  EXACT
+  TRIM_WHITESPACE
+  TOKEN_WHITESPACE
+  FLOAT_TOLERANCE
+  CUSTOM_CHECKER
+}
+
 enum SubmissionStatus {
   QUEUED
   RUNNING
   ACCEPTED
   WRONG_ANSWER
+  COMPILATION_ERROR
   RUNTIME_ERROR
-  COMPILE_ERROR
   TIME_LIMIT_EXCEEDED
   MEMORY_LIMIT_EXCEEDED
   OUTPUT_LIMIT_EXCEEDED
-  SYSTEM_ERROR
+  INTERNAL_ERROR
   CANCELLED
 }
 
@@ -49,71 +63,126 @@ enum SubmissionSource {
   SUBMIT
 }
 
+enum ExecutionMode {
+  PRACTICE
+  CONTEST
+}
+
 enum ContestStatus {
   DRAFT
   UPCOMING
-  LIVE
-  FINISHED
+  RUNNING
+  ENDED
   CANCELLED
 }
 
 model User {
-  id                String              @id @default(uuid()) @db.Uuid
-  email             String              @unique @db.VarChar(320)
-  role              Role                @default(USER)
-  status            UserStatus          @default(ACTIVE)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  profile           Profile?
-  submissions       Submission[]
+  id                  String                @id @default(uuid()) @db.Uuid
+  email               String                @unique @db.VarChar(320)
+  passwordHash        String?               @db.VarChar(512)
+  role                Role                  @default(USER)
+  status              UserStatus            @default(ACTIVE)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  profile             Profile?
+  sessions            Session[]
+  oauthAccounts       OAuthAccount[]
+  authoredProblems    Problem[]             @relation("ProblemAuthor")
+  submissions         Submission[]
   contestParticipants ContestParticipant[]
-  ratingHistory     RatingHistory[]
-  problemProgress   UserProblemProgress[]
-  auditLogs         AuditLog[]          @relation("AuditActor")
+  ratingHistory       RatingHistory[]
+  problemProgress     UserProblemProgress[]
+  auditLogs           AuditLog[]            @relation("AuditActor")
 
   @@index([status, createdAt])
   @@index([role])
 }
 
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(128)
+  ipAddress String?   @db.VarChar(64)
+  userAgent String?   @db.VarChar(512)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model OAuthAccount {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @db.Uuid
+  provider          OAuthProvider
+  providerAccountId String        @db.VarChar(160)
+  providerEmail     String?       @db.VarChar(320)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
 model Profile {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @unique @db.Uuid
-  username    String   @unique @db.VarChar(32)
-  displayName String?  @db.VarChar(80)
-  bio         String?  @db.VarChar(500)
-  avatarUrl   String?  @db.VarChar(2048)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  username       String   @unique @db.VarChar(32)
+  displayName    String?  @db.VarChar(80)
+  bio            String?  @db.VarChar(500)
+  avatarUrl      String?  @db.VarChar(2048)
+  rating         Int      @default(1200)
+  maxRating      Int      @default(1200)
+  rankTitle      String   @default("Unrated") @db.VarChar(64)
+  solvedCount    Int      @default(0)
+  attemptedCount Int      @default(0)
+  contestCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([displayName])
+  @@index([rating(sort: Desc), solvedCount(sort: Desc)])
+  @@index([solvedCount(sort: Desc), rating(sort: Desc)])
 }
 
 model Problem {
-  id               String                @id @default(uuid()) @db.Uuid
-  slug             String                @unique @db.VarChar(120)
-  title            String                @db.VarChar(200)
-  statement        String
-  inputFormat      String
-  outputFormat     String
-  constraints      String?
-  explanation      String?
-  difficulty       Difficulty
-  status           ProblemStatus         @default(DRAFT)
-  timeLimitMs      Int                   @default(2000)
-  memoryLimitMb    Int                   @default(256)
-  outputLimitBytes Int                   @default(1048576)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  publishedAt      DateTime?
-  tags             ProblemTag[]
-  testCases        TestCase[]
-  submissions      Submission[]
-  contestProblems  ContestProblem[]
-  progress         UserProblemProgress[]
+  id                   String                @id @default(uuid()) @db.Uuid
+  slug                 String                @unique @db.VarChar(120)
+  title                String                @db.VarChar(200)
+  statement            String
+  inputFormat          String
+  outputFormat         String
+  constraints          String?
+  examples             Json                  @default("[]")
+  explanation          String?
+  editorial            String?
+  difficulty           Difficulty
+  status               ProblemStatus         @default(DRAFT)
+  authorId             String?               @db.Uuid
+  timeLimitMs          Int                   @default(2000)
+  memoryLimitMb        Int                   @default(256)
+  outputLimitBytes     Int                   @default(1048576)
+  sourceSizeLimitBytes Int                   @default(65536)
+  comparisonMode       ComparisonMode        @default(TRIM_WHITESPACE)
+  floatTolerance       Float?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  publishedAt          DateTime?
+  author               User?                 @relation("ProblemAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  tags                 ProblemTag[]
+  testCases            TestCase[]
+  submissions          Submission[]
+  contestProblems      ContestProblem[]
+  progress             UserProblemProgress[]
 
   @@index([status, difficulty, createdAt])
   @@index([difficulty, status])
+  @@index([authorId, status])
 }
 
 model Tag {
@@ -135,15 +204,19 @@ model ProblemTag {
 }
 
 model TestCase {
-  id               String   @id @default(uuid()) @db.Uuid
-  problemId        String   @db.Uuid
-  sequence         Int
-  input            String
-  expectedOutput   String
-  isPublic         Boolean  @default(false)
-  createdAt        DateTime              @default(now())
-  problem          Problem               @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  results          SubmissionTestResult[]
+  id             String                 @id @default(uuid()) @db.Uuid
+  problemId      String                 @db.Uuid
+  sequence       Int
+  input          String
+  expectedOutput String
+  explanation    String?
+  isPublic       Boolean                @default(false)
+  weight         Int                    @default(1)
+  group          String?                @db.VarChar(80)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @default(now()) @updatedAt
+  problem        Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  results        SubmissionTestResult[]
 
   @@unique([problemId, sequence])
   @@index([problemId, isPublic, sequence])
@@ -163,46 +236,56 @@ model Language {
 }
 
 model Submission {
-  id            String                @id @default(uuid()) @db.Uuid
-  userId        String                @db.Uuid
-  problemId     String                @db.Uuid
-  languageId    String                @db.Uuid
-  sourceCode    String
-  status        SubmissionStatus      @default(QUEUED)
-  source        SubmissionSource      @default(SUBMIT)
-  score         Int                   @default(0)
-  passedTests   Int                   @default(0)
-  totalTests    Int                   @default(0)
+  id              String                 @id @default(uuid()) @db.Uuid
+  userId          String                 @db.Uuid
+  problemId       String                 @db.Uuid
+  languageId      String                 @db.Uuid
+  contestId       String?                @db.Uuid
+  sourceCode      String
+  status          SubmissionStatus       @default(QUEUED)
+  source          SubmissionSource       @default(SUBMIT)
+  mode            ExecutionMode          @default(PRACTICE)
+  idempotencyKey  String?                @db.VarChar(128)
+  judgeJobId      String?                @db.VarChar(128)
+  judgeAttempts   Int                    @default(0)
+  score           Int                    @default(0)
+  passedTests     Int                    @default(0)
+  totalTests      Int                    @default(0)
   executionTimeMs Int?
-  memoryUsedKb  Int?
-  errorMessage  String?
-  queuedAt      DateTime              @default(now())
-  startedAt     DateTime?
-  finishedAt    DateTime?
-  createdAt     DateTime              @default(now())
-  user          User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
-  problem       Problem               @relation(fields: [problemId], references: [id], onDelete: Restrict)
-  language      Language              @relation(fields: [languageId], references: [id], onDelete: Restrict)
-  testResults   SubmissionTestResult[]
+  memoryUsedKb    Int?
+  errorMessage    String?
+  queuedAt        DateTime               @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @default(now()) @updatedAt
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  problem         Problem                @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  language        Language               @relation(fields: [languageId], references: [id], onDelete: Restrict)
+  contest         Contest?               @relation(fields: [contestId], references: [id], onDelete: SetNull)
+  testResults     SubmissionTestResult[]
 
+  @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@index([problemId, createdAt])
   @@index([status, createdAt])
   @@index([userId, problemId, createdAt])
+  @@index([contestId, userId, createdAt])
+  @@index([contestId, problemId, status])
 }
 
 model SubmissionTestResult {
-  id               String           @id @default(uuid()) @db.Uuid
-  submissionId     String           @db.Uuid
-  testCaseId       String           @db.Uuid
-  status           SubmissionStatus
-  executionTimeMs  Int?
-  memoryUsedKb     Int?
-  actualOutput     String?
-  errorMessage     String?
-  createdAt        DateTime         @default(now())
-  submission       Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  testCase         TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
+  id              String           @id @default(uuid()) @db.Uuid
+  submissionId    String           @db.Uuid
+  testCaseId      String           @db.Uuid
+  status          SubmissionStatus
+  executionTimeMs Int?
+  memoryUsedKb    Int?
+  actualOutput    String?
+  errorMessage    String?
+  createdAt       DateTime         @default(now())
+  submission      Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCase        TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
 
   @@unique([submissionId, testCaseId])
   @@index([submissionId, createdAt])
@@ -210,17 +293,18 @@ model SubmissionTestResult {
 }
 
 model Contest {
-  id          String               @id @default(uuid()) @db.Uuid
-  slug        String               @unique @db.VarChar(120)
-  title       String               @db.VarChar(200)
-  description String?
-  status      ContestStatus        @default(DRAFT)
-  startsAt    DateTime
-  endsAt      DateTime
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  problems    ContestProblem[]
-  participants ContestParticipant[]
+  id            String               @id @default(uuid()) @db.Uuid
+  slug          String               @unique @db.VarChar(120)
+  title         String               @db.VarChar(200)
+  description   String?
+  status        ContestStatus        @default(DRAFT)
+  startsAt      DateTime
+  endsAt        DateTime
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  problems      ContestProblem[]
+  participants  ContestParticipant[]
+  submissions   Submission[]
   ratingHistory RatingHistory[]
 
   @@index([status, startsAt])
@@ -241,16 +325,20 @@ model ContestProblem {
 }
 
 model ContestParticipant {
-  contestId    String   @db.Uuid
-  userId       String   @db.Uuid
-  registeredAt DateTime @default(now())
-  finalScore   Int      @default(0)
-  rank         Int?
-  contest      Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  contestId      String    @db.Uuid
+  userId         String    @db.Uuid
+  registeredAt   DateTime  @default(now())
+  finalScore     Int       @default(0)
+  penaltyMinutes Int       @default(0)
+  solvedCount    Int       @default(0)
+  lastAcceptedAt DateTime?
+  rank           Int?
+  contest        Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@id([contestId, userId])
   @@index([contestId, rank])
+  @@index([contestId, finalScore(sort: Desc), penaltyMinutes(sort: Asc)])
   @@index([userId, registeredAt])
 }
 
@@ -270,15 +358,18 @@ model RatingHistory {
 }
 
 model UserProblemProgress {
-  userId       String   @db.Uuid
-  problemId    String   @db.Uuid
-  solved       Boolean  @default(false)
-  attempts     Int      @default(0)
-  firstSolvedAt DateTime?
-  lastAttemptAt DateTime?
-  updatedAt    DateTime @updatedAt
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problem      Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  userId           String    @db.Uuid
+  problemId        String    @db.Uuid
+  solved           Boolean   @default(false)
+  attempts         Int       @default(0)
+  bestRuntimeMs    Int?
+  bestMemoryKb     Int?
+  bestSubmissionId String?   @db.Uuid
+  firstSolvedAt    DateTime?
+  lastAttemptAt    DateTime?
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem          Problem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@id([userId, problemId])
   @@index([problemId, solved])
@@ -286,14 +377,14 @@ model UserProblemProgress {
 }
 
 model AuditLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  actorUserId String? @db.Uuid
-  action     String   @db.VarChar(120)
-  entityType String   @db.VarChar(80)
-  entityId   String?  @db.VarChar(120)
-  metadata   Json?
-  createdAt  DateTime @default(now())
-  actor      User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  action      String   @db.VarChar(120)
+  entityType  String   @db.VarChar(80)
+  entityId    String?  @db.VarChar(120)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId, createdAt])

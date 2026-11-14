@@ -5,5 +5,5 @@
     "types": ["node", "vitest/globals"],
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "prisma/**/*.ts", "tests/**/*.ts"]
 }

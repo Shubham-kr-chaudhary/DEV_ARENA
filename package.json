@@ -17,7 +17,9 @@
     "validate:foundation": "node scripts/validate-foundation.mjs",
     "db:generate": "pnpm --filter @devarena/api prisma:generate",
     "db:validate": "pnpm --filter @devarena/api prisma:validate",
-    "db:migrate": "pnpm --filter @devarena/api prisma:migrate"
+    "db:migrate": "pnpm --filter @devarena/api prisma:migrate",
+    "db:migrate:deploy": "pnpm --filter @devarena/api prisma:migrate:deploy",
+    "db:seed": "pnpm --filter @devarena/api prisma:seed"
   },
   "devDependencies": {
     "prettier": "^3.6.2"
