@@ -47,6 +47,68 @@ export interface SessionResolverDependencies {
 }
 
 /**
+ * Resolves the authenticated user from the session cookie when present on public routes
+ * (such as `GET /api/v1/problems` and `GET /api/v1/problems/:slug`) without rejecting
+ * unauthenticated requests. If a stale or invalid session cookie is present, clears the cookie
+ * and continues as an unauthenticated request.
+ */
+export function createOptionalAuthMiddleware(deps: SessionResolverDependencies): MiddlewareHandler {
+  return async (c, next) => {
+    const cookieHeader = c.req.header('cookie');
+    const rawToken = extractSessionTokenFromCookieHeader(cookieHeader, deps.cookieName);
+
+    if (!rawToken) {
+      await next();
+      return;
+    }
+
+    const tokenHash = hashSessionToken(rawToken);
+    const now = deps.nowFn ? deps.nowFn() : new Date();
+
+    try {
+      const activeSession = await deps.findActiveSessionByTokenHash(tokenHash, now);
+      if (activeSession && activeSession.user.status === 'ACTIVE') {
+        const authState: AuthenticatedContextState = {
+          sessionId: activeSession.sessionId,
+          expiresAt: activeSession.expiresAt,
+          user: activeSession.user,
+          actor: {
+            userId: activeSession.user.id,
+            role: activeSession.user.role,
+          },
+        };
+        c.set(AUTH_CONTEXT_KEY as never, authState as never);
+      } else {
+        c.header(
+          'Set-Cookie',
+          serializeClearedSessionCookie({
+            cookieName: deps.cookieName,
+            isProduction: deps.isProduction,
+          }),
+        );
+      }
+    } catch (error) {
+      if (error instanceof RepositoryError && error.code === 'FORBIDDEN') {
+        if (deps.revokeSessionByTokenHash) {
+          await deps.revokeSessionByTokenHash(tokenHash, now).catch(() => false);
+        }
+        c.header(
+          'Set-Cookie',
+          serializeClearedSessionCookie({
+            cookieName: deps.cookieName,
+            isProduction: deps.isProduction,
+          }),
+        );
+      } else {
+        throw error;
+      }
+    }
+
+    await next();
+  };
+}
+
+/**
  * Resolves the authenticated user strictly from the server-validated database session cookie.
  *
  * Security invariants:

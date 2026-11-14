@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-6 py-16">
@@ -10,24 +12,24 @@ export default function HomePage() {
         track your competitive rating.
       </p>
       <div className="mt-10 flex flex-wrap gap-4">
-        <a
+        <Link
           className="rounded-lg bg-white px-5 py-3 font-medium text-zinc-950 transition hover:bg-zinc-200"
           href="/problems"
         >
           Browse problems
-        </a>
-        <a
+        </Link>
+        <Link
           className="rounded-lg border border-zinc-700 px-5 py-3 font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-900"
           href="/login"
         >
           Sign in
-        </a>
-        <a
+        </Link>
+        <Link
           className="rounded-lg border border-zinc-700 px-5 py-3 font-medium text-zinc-100 transition hover:border-zinc-500 hover:bg-zinc-900"
           href="/register"
         >
           Create account
-        </a>
+        </Link>
       </div>
     </main>
   );

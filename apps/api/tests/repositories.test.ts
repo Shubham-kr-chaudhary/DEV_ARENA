@@ -40,7 +40,7 @@ describe('Repository utilities and error boundaries', () => {
     });
   });
 
-  it('maps Prisma unique and not-found error codes to deterministic RepositoryError instances', () => {
+  it('maps Prisma unique and not-found error codes to RepositoryError instances', () => {
     const uniqueErr = mapPrismaRepositoryError({ code: 'P2002' }, 'Fallback');
     expect(uniqueErr).toBeInstanceOf(RepositoryError);
     expect(uniqueErr.code).toBe('CONFLICT');
@@ -160,6 +160,8 @@ describe('ProblemRepository security and publication boundaries', () => {
           memoryLimitMb: 256,
           outputLimitBytes: 1048576,
           sourceSizeLimitBytes: 65536,
+          comparisonMode: 'TRIM_WHITESPACE' as const,
+          floatTolerance: null,
           publishedAt: new Date('2026-09-22T12:00:00.000Z'),
           tags: [{ tag: { id: 'tag-1', slug: 'arrays', name: 'Arrays' } }],
           testCases: [
@@ -192,7 +194,7 @@ describe('ProblemRepository security and publication boundaries', () => {
     expect(detail?.publicTestCases[0]?.id).toBe('tc-public');
   });
 
-  it('enforces admin role and requires both public and hidden test cases before publishing', async () => {
+  it('enforces admin role and requires public and hidden tests before publishing', async () => {
     const fakePrisma = {
       $transaction: async <T>(fn: (tx: unknown) => Promise<T>) =>
         fn({
@@ -242,7 +244,7 @@ describe('SubmissionRepository state machine, idempotency, and IDOR/hidden test 
     expect(isValidSubmissionStateTransition('QUEUED', 'ACCEPTED')).toBe(false);
   });
 
-  it('prevents IDOR access by other users and strips hidden test details for non-admin owners', async () => {
+  it('prevents IDOR access and strips hidden test details for non-admin owners', async () => {
     const now = new Date('2026-10-17T12:00:00.000Z');
     const fakePrisma = {
       submission: {
@@ -423,7 +425,7 @@ describe('ContestRepository and LeaderboardRepository domain rules', () => {
     expect(adminUpcomingView?.problems).toHaveLength(1);
   });
 
-  it('resolves competitive rank titles from ratings and guards AuditRepository admin access', async () => {
+  it('resolves rank titles from ratings and guards AuditRepository admin access', async () => {
     expect(resolveRankTitleFromRating(1150)).toBe('Newbie');
     expect(resolveRankTitleFromRating(1250)).toBe('Pupil');
     expect(resolveRankTitleFromRating(1450)).toBe('Specialist');

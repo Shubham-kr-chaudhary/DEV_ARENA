@@ -13,6 +13,8 @@ export interface CsrfProtectionOptions {
   readonly allowedOrigin: string;
 }
 
+export type CsrfMiddlewareOptions = CsrfProtectionOptions;
+
 function normalizeOrigin(originOrUrl: string): string | null {
   try {
     const parsed = new URL(originOrUrl);

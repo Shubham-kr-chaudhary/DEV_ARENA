@@ -9,6 +9,8 @@ export interface RateLimitCheckResult {
   readonly retryAfterSeconds: number;
 }
 
+export type RateLimitConsumeResult = RateLimitCheckResult;
+
 export interface RateLimitStore {
   consume(key: string, limit: number, windowMs: number, nowMs?: number): RateLimitCheckResult;
   reset(key?: string): void;

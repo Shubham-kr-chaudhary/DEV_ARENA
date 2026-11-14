@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { ApiClientError, apiClient } from '../../lib/api-client';
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -23,7 +26,7 @@ export default function RegisterPage() {
         password,
         ...(displayName.trim().length > 0 ? { displayName: displayName.trim() } : {}),
       });
-      window.location.assign('/problems');
+      router.push('/problems');
     } catch (error) {
       if (error instanceof ApiClientError) {
         setErrorMessage(error.message);
@@ -110,6 +113,13 @@ export default function RegisterPage() {
         >
           {submitting ? 'Creating account...' : 'Create account'}
         </button>
+
+        <p className="mt-2 text-center text-sm text-zinc-400">
+          Already have an account?{' '}
+          <Link href="/login" className="text-zinc-200 underline hover:text-white">
+            Sign in
+          </Link>
+        </p>
       </form>
     </main>
   );

@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { ApiClientError, apiClient } from '../../lib/api-client';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -16,7 +19,7 @@ export default function LoginPage() {
 
     try {
       await apiClient.login({ email, password });
-      window.location.assign('/problems');
+      router.push('/problems');
     } catch (error) {
       if (error instanceof ApiClientError) {
         setErrorMessage(error.message);
@@ -78,6 +81,13 @@ export default function LoginPage() {
         >
           {submitting ? 'Signing in...' : 'Sign in'}
         </button>
+
+        <p className="mt-2 text-center text-sm text-zinc-400">
+          Don&apos;t have an account?{' '}
+          <Link href="/register" className="text-zinc-200 underline hover:text-white">
+            Create account
+          </Link>
+        </p>
       </form>
     </main>
   );

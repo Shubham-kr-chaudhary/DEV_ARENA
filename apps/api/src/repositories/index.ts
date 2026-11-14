@@ -22,14 +22,23 @@ export {
 } from './leaderboard.repository.js';
 export {
   ProblemRepository,
+  type AdminProblemDetailRecord,
+  type AdminProblemListFilter,
+  type AdminProblemSummaryRecord,
+  type AdminTestCaseRecord,
   type CreateProblemAdminInput,
   type JudgeProblemExecutionBundle,
   type JudgeTestCaseDto,
   type ProblemCatalogueFilter,
   type ProblemCatalogueItemDto,
+  type ProblemSortField,
+  type ProblemTagItemDto,
   type PublicProblemDetailDto,
   type PublicTestCaseDto,
+  type SortOrderDirection,
+  type SupportedLanguageItemDto,
   type TestCaseAdminInput,
+  type UpdateProblemAdminInput,
   type UserSolveProgressStatus,
 } from './problem.repository.js';
 export {

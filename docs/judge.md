@@ -76,12 +76,10 @@ stateDiagram-v2
 
 ## 4. `RUN` vs. `SUBMIT` Semantics
 
-| Attribute                      | `RUN` (`POST /api/v1/runs`)                                                          | `SUBMIT` (`POST /api/v1/submissions`)                                                                                  |
-| :----------------------------- | :----------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------- |
-| **Test Cases Executed**        | Public sample test cases only (`isPublic = true`)                                    | All test cases (`isPublic = true` and `isPublic = false`)                                                              |
-| **Output Visibility**          | Returns per-test Input, Expected Output, Actual Output, Runtime, Memory, and Verdict | Exposes Input/Expected/Actual for public tests only; hidden tests expose aggregate pass count and overall verdict only |
-| **User Statistics & Progress** | Does not increment solved count or affect `UserProblemProgress`                      | Updates `UserProblemProgress`, solved count, and best runtime/memory                                                   |
-| **Contest Scoring & Rating**   | Never affects contest score, penalty, or rating                                      | Updates `ContestParticipant` score/penalty when submitted in `CONTEST` mode during a live window                       |
+- Attribute: **Test Cases Executed** — `RUN` (`POST /api/v1/runs`): Public sample test cases only (`isPublic = true`) — `SUBMIT` (`POST /api/v1/submissions`): All test cases (`isPublic = true` and `isPublic = false`)
+- Attribute: **Output Visibility** — `RUN` (`POST /api/v1/runs`): Returns per-test Input, Expected Output, Actual Output, Runtime, Memory, and Verdict — `SUBMIT` (`POST /api/v1/submissions`): Exposes Input/Expected/Actual for public tests only; hidden tests expose aggregate pass count and overall verdict only
+- Attribute: **User Statistics & Progress** — `RUN` (`POST /api/v1/runs`): Does not increment solved count or affect `UserProblemProgress` — `SUBMIT` (`POST /api/v1/submissions`): Updates `UserProblemProgress`, solved count, and best runtime/memory
+- Attribute: **Contest Scoring & Rating** — `RUN` (`POST /api/v1/runs`): Never affects contest score, penalty, or rating — `SUBMIT` (`POST /api/v1/submissions`): Updates `ContestParticipant` score/penalty when submitted in `CONTEST` mode during a live window
 
 ## 5. `LanguageRunner` Abstraction & Pinned Runtimes
 
@@ -95,10 +93,8 @@ Every supported language implements the server-owned `LanguageRunner` contract:
 
 ### Initial Pinned Languages
 
-| Language             | Slug         | Pinned Toolchain                                     | Compile / Check Command (`argv`)                                                  | Execution Command (`argv`)                                                                              | Default Limits                                                                                                       |
-| :------------------- | :----------- | :--------------------------------------------------- | :-------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------- |
-| **C++ (C++20)**      | `cpp`        | `g++ 14.2.0` (Debian Bookworm / Alpine pinned image) | `['g++', '-std=c++20', '-O2', '-pipe', '-o', '/work/solution', '/work/main.cpp']` | `['/work/solution']`                                                                                    | Compile: 10s wall, 512 MB RAM; Run: `problem.timeLimitMs` (default 2000ms), `problem.memoryLimitMb` (default 256 MB) |
-| **JavaScript (ESM)** | `javascript` | `Node.js 22.14.0 LTS`                                | `['node', '--check', '/work/solution.mjs']`                                       | `['node', '--max-old-space-size=192', '--disallow-code-generation-from-strings', '/work/solution.mjs']` | Check: 5s wall, 256 MB RAM; Run: `problem.timeLimitMs` (default 2000ms), `problem.memoryLimitMb` (default 256 MB)    |
+- Language: **C++ (C++20)** — Slug: `cpp` — Pinned Toolchain: `g++ 14.2.0` (Debian Bookworm / Alpine pinned image) — Compile / Check Command (`argv`): `['g++', '-std=c++20', '-O2', '-pipe', '-o', '/work/solution', '/work/main.cpp']` — Execution Command (`argv`): `['/work/solution']` — Default Limits: Compile: 10s wall, 512 MB RAM; Run: `problem.timeLimitMs` (default 2000ms), `problem.memoryLimitMb` (default 256 MB)
+- Language: **JavaScript (ESM)** — Slug: `javascript` — Pinned Toolchain: `Node.js 22.14.0 LTS` — Compile / Check Command (`argv`): `['node', '--check', '/work/solution.mjs']` — Execution Command (`argv`): `['node', '--max-old-space-size=192', '--disallow-code-generation-from-strings', '/work/solution.mjs']` — Default Limits: Check: 5s wall, 256 MB RAM; Run: `problem.timeLimitMs` (default 2000ms), `problem.memoryLimitMb` (default 256 MB)
 
 ## 6. Deterministic Output Comparison
 
@@ -107,7 +103,7 @@ The output comparator (`apps/judge-worker/src/comparator`) normalizes `\r\n` and
 1. `TRIM_WHITESPACE` (Default): Strips trailing whitespace on each line and trailing empty lines at the end of output before exact comparison.
 2. `EXACT`: Byte-for-byte comparison after line-ending normalization.
 3. `TOKEN_WHITESPACE`: Splits output into whitespace-delimited tokens and compares token sequences.
-4. `FLOAT_TOLERANCE`: Parses numeric tokens and verifies $\frac{|a - e|}{\max(1, |e|)} \le \epsilon$ (default $\epsilon = 10^{-6}$).
+4. `FLOAT_TOLERANCE`: Parses numeric tokens and verifies `|a - e| / max(1, |e|) <= epsilon` (default `epsilon = 1e-6`).
 5. `CUSTOM_CHECKER`: Hook for problem-specific deterministic verifier programs in future phases.
 
 ## 7. Local Development Judge Parity

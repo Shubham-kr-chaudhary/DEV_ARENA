@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   APP_NAME,
+  COMPARISON_MODES,
   EXECUTION_MODES,
   INITIAL_SUPPORTED_LANGUAGES,
   PROBLEM_DIFFICULTIES,
   PROBLEM_STATUSES,
   SUBMISSION_VERDICTS,
   USER_ROLES,
+  USER_SOLVE_PROGRESS_STATUSES,
 } from '../src/index.js';
 
 describe('shared foundation', () => {
@@ -18,6 +20,14 @@ describe('shared foundation', () => {
     expect(USER_ROLES).toEqual(['USER', 'ADMIN']);
     expect(PROBLEM_DIFFICULTIES).toEqual(['EASY', 'MEDIUM', 'HARD']);
     expect(PROBLEM_STATUSES).toEqual(['DRAFT', 'REVIEW', 'PUBLISHED', 'ARCHIVED']);
+    expect(COMPARISON_MODES).toEqual([
+      'EXACT',
+      'TRIM_WHITESPACE',
+      'TOKEN_WHITESPACE',
+      'FLOAT_TOLERANCE',
+      'CUSTOM_CHECKER',
+    ]);
+    expect(USER_SOLVE_PROGRESS_STATUSES).toEqual(['SOLVED', 'ATTEMPTED', 'UNSOLVED']);
     expect(EXECUTION_MODES).toEqual(['PRACTICE', 'CONTEST']);
     expect(INITIAL_SUPPORTED_LANGUAGES).toEqual(['cpp', 'javascript']);
     expect(SUBMISSION_VERDICTS).toContain('COMPILATION_ERROR');

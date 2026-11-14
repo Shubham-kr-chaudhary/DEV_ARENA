@@ -11,6 +11,18 @@ export type ProblemDifficulty = (typeof PROBLEM_DIFFICULTIES)[number];
 export const PROBLEM_STATUSES = ['DRAFT', 'REVIEW', 'PUBLISHED', 'ARCHIVED'] as const;
 export type ProblemStatus = (typeof PROBLEM_STATUSES)[number];
 
+export const COMPARISON_MODES = [
+  'EXACT',
+  'TRIM_WHITESPACE',
+  'TOKEN_WHITESPACE',
+  'FLOAT_TOLERANCE',
+  'CUSTOM_CHECKER',
+] as const;
+export type ComparisonMode = (typeof COMPARISON_MODES)[number];
+
+export const USER_SOLVE_PROGRESS_STATUSES = ['SOLVED', 'ATTEMPTED', 'UNSOLVED'] as const;
+export type UserSolveProgressStatus = (typeof USER_SOLVE_PROGRESS_STATUSES)[number];
+
 export const SUBMISSION_VERDICTS = [
   'QUEUED',
   'RUNNING',

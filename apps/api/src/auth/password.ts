@@ -431,7 +431,9 @@ function fromBase64NoPad(str: string): Buffer {
 }
 
 export function formatArgon2idPhc(salt: Buffer, tag: Buffer, params: Argon2idParams): string {
-  return `$argon2id$v=19$m=${params.memoryKiB},t=${params.passes},p=${params.parallelism}$${toBase64NoPad(salt)}$${toBase64NoPad(tag)}`;
+  const saltB64 = toBase64NoPad(salt);
+  const tagB64 = toBase64NoPad(tag);
+  return `$argon2id$v=19$m=${params.memoryKiB},t=${params.passes},p=${params.parallelism}$${saltB64}$${tagB64}`;
 }
 
 /**
@@ -452,8 +454,8 @@ export interface PasswordVerificationResult {
 }
 
 /**
- * Verifies a plaintext password against a stored `$argon2id$v=19$...` or development `$scrypt$...` hash
- * using constant-time comparison (`crypto.timingSafeEqual`).
+ * Verifies a plaintext password against a stored `$argon2id$v=19$...` or development `$scrypt$...`
+ * hash using constant-time comparison (`crypto.timingSafeEqual`).
  */
 export async function verifyPassword(
   password: string,

@@ -1,14 +1,37 @@
 import {
+  adminProblemDetailResponseSchema,
+  adminProblemLifecycleResponseSchema,
+  adminProblemListQuerySchema,
+  adminProblemListResponseSchema,
+  adminReplaceTestCasesResponseSchema,
   apiErrorResponseSchema,
   authSessionResponseSchema,
+  createProblemRequestSchema,
   loginRequestSchema,
   logoutResponseSchema,
+  problemListQuerySchema,
+  problemListResponseSchema,
+  problemSlugSchema,
+  publicProblemDetailResponseSchema,
   registerRequestSchema,
+  replaceProblemTestCasesRequestSchema,
+  updateProblemRequestSchema,
+  type AdminProblemDetailDto,
+  type AdminProblemLifecycleResponse,
+  type AdminProblemListQuery,
+  type AdminProblemListResponse,
+  type AdminReplaceTestCasesResponse,
   type ApiErrorCode,
   type AuthenticatedUserDto,
+  type CreateProblemRequest,
   type LoginRequest,
   type LogoutResponse,
+  type ProblemListQuery,
+  type ProblemListResponse,
+  type PublicProblemDetailContractDto,
   type RegisterRequest,
+  type ReplaceProblemTestCasesRequest,
+  type UpdateProblemRequest,
 } from '@devarena/api-contracts';
 
 export class ApiClientError extends Error {
@@ -41,6 +64,17 @@ const DEFAULT_API_BASE_URL =
   typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE_URL
     ? process.env.NEXT_PUBLIC_API_BASE_URL
     : 'http://localhost:4000';
+
+function buildQueryString(params: Record<string, string | number | undefined>): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && String(value).trim().length > 0) {
+      searchParams.set(key, String(value).trim());
+    }
+  }
+  const serialized = searchParams.toString();
+  return serialized.length > 0 ? `?${serialized}` : '';
+}
 
 /**
  * Typed HTTP client for the DevArena `/api/v1` backend.
@@ -144,6 +178,171 @@ export function createApiClient(options: ApiClientOptions = {}) {
         }
         throw error;
       }
+    },
+
+    async listProblems(
+      query: Partial<ProblemListQuery> = {},
+      cookieHeader?: string,
+    ): Promise<ProblemListResponse> {
+      const validatedQuery = problemListQuerySchema.parse(query);
+      const qs = buildQueryString({
+        page: validatedQuery.page,
+        pageSize: validatedQuery.pageSize,
+        search: validatedQuery.search,
+        difficulty: validatedQuery.difficulty,
+        tag: validatedQuery.tag,
+        status: validatedQuery.status,
+        sortBy: validatedQuery.sortBy,
+        sortOrder: validatedQuery.sortOrder,
+      });
+
+      return await requestJson(
+        `/api/v1/problems${qs}`,
+        {
+          method: 'GET',
+          ...(cookieHeader ? { headers: { Cookie: cookieHeader } } : {}),
+        },
+        (data) => problemListResponseSchema.parse(data),
+      );
+    },
+
+    async getProblemBySlug(
+      slug: string,
+      cookieHeader?: string,
+    ): Promise<PublicProblemDetailContractDto> {
+      const validatedSlug = problemSlugSchema.parse(slug);
+      const result = await requestJson(
+        `/api/v1/problems/${encodeURIComponent(validatedSlug)}`,
+        {
+          method: 'GET',
+          ...(cookieHeader ? { headers: { Cookie: cookieHeader } } : {}),
+        },
+        (data) => publicProblemDetailResponseSchema.parse(data),
+      );
+      return result.problem;
+    },
+
+    async listAdminProblems(
+      query: Partial<AdminProblemListQuery> = {},
+      cookieHeader?: string,
+    ): Promise<AdminProblemListResponse> {
+      const validatedQuery = adminProblemListQuerySchema.parse(query);
+      const qs = buildQueryString({
+        page: validatedQuery.page,
+        pageSize: validatedQuery.pageSize,
+        search: validatedQuery.search,
+        difficulty: validatedQuery.difficulty,
+        status: validatedQuery.status,
+        sortBy: validatedQuery.sortBy,
+        sortOrder: validatedQuery.sortOrder,
+      });
+
+      return await requestJson(
+        `/api/v1/admin/problems${qs}`,
+        {
+          method: 'GET',
+          ...(cookieHeader ? { headers: { Cookie: cookieHeader } } : {}),
+        },
+        (data) => adminProblemListResponseSchema.parse(data),
+      );
+    },
+
+    async getAdminProblemById(
+      problemId: string,
+      cookieHeader?: string,
+    ): Promise<AdminProblemDetailDto> {
+      const result = await requestJson(
+        `/api/v1/admin/problems/${encodeURIComponent(problemId)}`,
+        {
+          method: 'GET',
+          ...(cookieHeader ? { headers: { Cookie: cookieHeader } } : {}),
+        },
+        (data) => adminProblemDetailResponseSchema.parse(data),
+      );
+      return result.problem;
+    },
+
+    async createAdminProblem(input: CreateProblemRequest): Promise<AdminProblemDetailDto> {
+      const validated = createProblemRequestSchema.parse(input);
+      const result = await requestJson(
+        '/api/v1/admin/problems',
+        {
+          method: 'POST',
+          body: JSON.stringify(validated),
+        },
+        (data) => adminProblemDetailResponseSchema.parse(data),
+      );
+      return result.problem;
+    },
+
+    async updateAdminProblem(
+      problemId: string,
+      input: UpdateProblemRequest,
+    ): Promise<AdminProblemDetailDto> {
+      const validated = updateProblemRequestSchema.parse(input);
+      const result = await requestJson(
+        `/api/v1/admin/problems/${encodeURIComponent(problemId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(validated),
+        },
+        (data) => adminProblemDetailResponseSchema.parse(data),
+      );
+      return result.problem;
+    },
+
+    async replaceAdminProblemTestCases(
+      problemId: string,
+      input: ReplaceProblemTestCasesRequest,
+    ): Promise<AdminReplaceTestCasesResponse> {
+      const validated = replaceProblemTestCasesRequestSchema.parse(input);
+      return await requestJson(
+        `/api/v1/admin/problems/${encodeURIComponent(problemId)}/test-cases`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(validated),
+        },
+        (data) => adminReplaceTestCasesResponseSchema.parse(data),
+      );
+    },
+
+    async publishAdminProblem(
+      problemId: string,
+    ): Promise<AdminProblemLifecycleResponse['problem']> {
+      const result = await requestJson(
+        `/api/v1/admin/problems/${encodeURIComponent(problemId)}/publish`,
+        {
+          method: 'POST',
+        },
+        (data) => adminProblemLifecycleResponseSchema.parse(data),
+      );
+      return result.problem;
+    },
+
+    async unpublishAdminProblem(
+      problemId: string,
+    ): Promise<AdminProblemLifecycleResponse['problem']> {
+      const result = await requestJson(
+        `/api/v1/admin/problems/${encodeURIComponent(problemId)}/unpublish`,
+        {
+          method: 'POST',
+        },
+        (data) => adminProblemLifecycleResponseSchema.parse(data),
+      );
+      return result.problem;
+    },
+
+    async archiveAdminProblem(
+      problemId: string,
+    ): Promise<AdminProblemLifecycleResponse['problem']> {
+      const result = await requestJson(
+        `/api/v1/admin/problems/${encodeURIComponent(problemId)}/archive`,
+        {
+          method: 'POST',
+        },
+        (data) => adminProblemLifecycleResponseSchema.parse(data),
+      );
+      return result.problem;
     },
   };
 }

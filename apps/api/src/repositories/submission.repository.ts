@@ -66,6 +66,32 @@ export function assertValidSubmissionStateTransition(
   }
 }
 
+function computeNextBestMetric(
+  isAccepted: boolean,
+  candidate: number | null,
+  currentBest: number | null | undefined,
+): number | null {
+  if (!isAccepted || candidate === null) {
+    return currentBest ?? null;
+  }
+  if (currentBest !== null && currentBest !== undefined) {
+    return Math.min(currentBest, candidate);
+  }
+  return candidate;
+}
+
+function computeFirstSolvedAt(
+  wasAlreadySolved: boolean,
+  existingFirstSolvedAt: Date | null | undefined,
+  isAccepted: boolean,
+  finishedAt: Date,
+): Date | null {
+  if (wasAlreadySolved && existingFirstSolvedAt) {
+    return existingFirstSolvedAt;
+  }
+  return isAccepted ? finishedAt : null;
+}
+
 export interface CreateSubmissionInput {
   readonly userId: string;
   readonly problemId: string;
@@ -390,29 +416,34 @@ export class SubmissionRepository {
           const runtimeCandidate = input.executionTimeMs ?? null;
           const memoryCandidate = input.memoryUsedKb ?? null;
 
-          const nextBestRuntime =
-            isAccepted && runtimeCandidate !== null
-              ? existingProgress?.bestRuntimeMs !== null &&
-                existingProgress?.bestRuntimeMs !== undefined
-                ? Math.min(existingProgress.bestRuntimeMs, runtimeCandidate)
-                : runtimeCandidate
-              : (existingProgress?.bestRuntimeMs ?? null);
+          const nextBestRuntime = computeNextBestMetric(
+            isAccepted,
+            runtimeCandidate,
+            existingProgress?.bestRuntimeMs,
+          );
 
-          const nextBestMemory =
-            isAccepted && memoryCandidate !== null
-              ? existingProgress?.bestMemoryKb !== null &&
-                existingProgress?.bestMemoryKb !== undefined
-                ? Math.min(existingProgress.bestMemoryKb, memoryCandidate)
-                : memoryCandidate
-              : (existingProgress?.bestMemoryKb ?? null);
+          const nextBestMemory = computeNextBestMetric(
+            isAccepted,
+            memoryCandidate,
+            existingProgress?.bestMemoryKb,
+          );
 
-          const improvedBestSubmissionId =
-            isAccepted &&
-            (existingProgress?.bestSubmissionId === null ||
-              existingProgress?.bestSubmissionId === undefined ||
-              nextBestRuntime === runtimeCandidate)
-              ? input.submissionId
-              : (existingProgress?.bestSubmissionId ?? null);
+          const hasNoExistingBestSubmission =
+            existingProgress?.bestSubmissionId === null ||
+            existingProgress?.bestSubmissionId === undefined;
+          const shouldUpdateBestSubmission =
+            isAccepted && (hasNoExistingBestSubmission || nextBestRuntime === runtimeCandidate);
+          const existingBestSubmissionId = existingProgress?.bestSubmissionId ?? null;
+          const improvedBestSubmissionId = shouldUpdateBestSubmission
+            ? input.submissionId
+            : existingBestSubmissionId;
+
+          const firstSolvedAt = computeFirstSolvedAt(
+            wasAlreadySolved,
+            existingProgress?.firstSolvedAt,
+            isAccepted,
+            finishedAt,
+          );
 
           await tx.userProblemProgress.upsert({
             where: {
@@ -427,12 +458,7 @@ export class SubmissionRepository {
               bestRuntimeMs: nextBestRuntime,
               bestMemoryKb: nextBestMemory,
               bestSubmissionId: improvedBestSubmissionId,
-              firstSolvedAt:
-                wasAlreadySolved && existingProgress?.firstSolvedAt
-                  ? existingProgress.firstSolvedAt
-                  : isAccepted
-                    ? finishedAt
-                    : null,
+              firstSolvedAt,
               lastAttemptAt: finishedAt,
             },
             create: {

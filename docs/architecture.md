@@ -48,14 +48,12 @@ flowchart TB
 
 ## 2. Workspace Boundaries
 
-| Workspace Package        | Responsibility                                                              | Allowed Internal Imports                                          | Forbidden Imports                                                |
-| :----------------------- | :-------------------------------------------------------------------------- | :---------------------------------------------------------------- | :--------------------------------------------------------------- |
-| `apps/web`               | Browser UI, SSR pages, Coding Arena                                         | `@devarena/api-contracts`, `@devarena/shared`                     | `@devarena/config`, `@prisma/client`, `pg`, Node `child_process` |
-| `apps/api`               | HTTP transport, auth, RBAC, domain services, Prisma DB access, SQS producer | `@devarena/api-contracts`, `@devarena/config`, `@devarena/shared` | `apps/web`, `apps/judge-worker`, `child_process` for user code   |
-| `apps/judge-worker`      | SQS consumer, language runners, sandbox orchestration, output comparison    | `@devarena/api-contracts`, `@devarena/config`, `@devarena/shared` | `apps/web`, HTTP route controllers                               |
-| `packages/api-contracts` | Browser-safe Zod request/response schemas and DTO types                     | `@devarena/shared`                                                | `@devarena/config`, Prisma, Node-only modules, secrets           |
-| `packages/config`        | Server and worker environment variable validation                           | `@devarena/shared`                                                | Browser modules                                                  |
-| `packages/shared`        | Zero-dependency domain constants, enums, and pure TypeScript types          | None                                                              | All external runtime packages                                    |
+- Workspace Package: `apps/web` — Responsibility: Browser UI, SSR pages, Coding Arena — Allowed Internal Imports: `@devarena/api-contracts`, `@devarena/shared` — Forbidden Imports: `@devarena/config`, `@prisma/client`, `pg`, Node `child_process`
+- Workspace Package: `apps/api` — Responsibility: HTTP transport, auth, RBAC, domain services, Prisma DB access, SQS producer — Allowed Internal Imports: `@devarena/api-contracts`, `@devarena/config`, `@devarena/shared` — Forbidden Imports: `apps/web`, `apps/judge-worker`, `child_process` for user code
+- Workspace Package: `apps/judge-worker` — Responsibility: SQS consumer, language runners, sandbox orchestration, output comparison — Allowed Internal Imports: `@devarena/api-contracts`, `@devarena/config`, `@devarena/shared` — Forbidden Imports: `apps/web`, HTTP route controllers
+- Workspace Package: `packages/api-contracts` — Responsibility: Browser-safe Zod request/response schemas and DTO types — Allowed Internal Imports: `@devarena/shared` — Forbidden Imports: `@devarena/config`, Prisma, Node-only modules, secrets
+- Workspace Package: `packages/config` — Responsibility: Server and worker environment variable validation — Allowed Internal Imports: `@devarena/shared` — Forbidden Imports: Browser modules
+- Workspace Package: `packages/shared` — Responsibility: Zero-dependency domain constants, enums, and pure TypeScript types — Allowed Internal Imports: None — Forbidden Imports: All external runtime packages
 
 ## 3. Non-Negotiable Architectural Invariants
 

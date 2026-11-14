@@ -35,11 +35,7 @@ pnpm db:generate
 
 **Resolution**:
 
-1. Verify the local PostgreSQL container is running and healthy:
-   ```bash
-   docker compose -f infra/local/postgres/compose.yml ps
-   docker compose -f infra/local/postgres/compose.yml up -d
-   ```
+1. Verify the local PostgreSQL container is running and healthy (`docker compose -f infra/local/postgres/compose.yml ps` and `docker compose -f infra/local/postgres/compose.yml up -d`).
 2. Confirm `DATABASE_URL` in `.env` matches `postgresql://devarena:devarena@localhost:5432/devarena`.
 
 ## 4. `loadServerConfig` Throws on `SESSION_SECRET` in Production Mode
