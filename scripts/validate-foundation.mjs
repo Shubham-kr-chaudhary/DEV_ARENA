@@ -21,7 +21,21 @@ const requiredFiles = [
   'apps/web/app/login/page.tsx',
   'apps/web/app/register/page.tsx',
   'apps/web/app/problems/page.tsx',
+  'apps/web/app/problems/[slug]/page.tsx',
+  'apps/web/app/arena/[problemSlug]/page.tsx',
+  'apps/web/app/admin/problems/page.tsx',
+  'apps/web/components/arena/ArenaIcons.tsx',
+  'apps/web/components/arena/MonacoCodeEditor.tsx',
+  'apps/web/components/arena/CodeEditorLazy.tsx',
+  'apps/web/components/arena/ProblemSpecificationPane.tsx',
+  'apps/web/components/arena/ArenaTestbenchPanel.tsx',
+  'apps/web/components/arena/CodingArenaWorkspace.tsx',
   'apps/web/lib/api-client.ts',
+  'apps/web/lib/arena-templates.ts',
+  'apps/web/lib/arena-storage.ts',
+  'apps/web/lib/arena-workspace.ts',
+  'apps/web/tests/page.test.ts',
+  'apps/web/tests/arena.test.ts',
   'apps/api/package.json',
   'apps/api/tsconfig.json',
   'apps/api/prisma.config.ts',
@@ -41,7 +55,10 @@ const requiredFiles = [
   'apps/api/src/middleware/rate-limit.middleware.ts',
   'apps/api/src/middleware/index.ts',
   'apps/api/src/services/auth.service.ts',
+  'apps/api/src/services/problem.service.ts',
   'apps/api/src/routes/v1/auth.routes.ts',
+  'apps/api/src/routes/v1/problems.routes.ts',
+  'apps/api/src/routes/v1/admin-problems.routes.ts',
   'apps/api/src/db/client.ts',
   'apps/api/src/db/health.ts',
   'apps/api/src/db/index.ts',
@@ -55,6 +72,7 @@ const requiredFiles = [
   'apps/api/src/repositories/index.ts',
   'apps/api/tests/app.test.ts',
   'apps/api/tests/auth.test.ts',
+  'apps/api/tests/problems.test.ts',
   'apps/api/tests/repositories.test.ts',
   'apps/api/tests/seed.test.ts',
   'apps/judge-worker/package.json',
@@ -83,6 +101,8 @@ const requiredFiles = [
   'docs/phase-1-validation.md',
   'docs/phase-2-validation.md',
   'docs/phase-3-validation.md',
+  'docs/phase-4-validation.md',
+  'docs/phase-5-validation.md',
   'docs/adr/README.md',
   'docs/adr/ADR-001-monorepo.md',
   'docs/adr/ADR-002-frontend-architecture.md',
@@ -159,12 +179,11 @@ const initMigrationContent = readFileSync(
 const initMigrationHash = createHash('sha256').update(initMigrationContent).digest('hex');
 const expectedInitHash = '477f0630e3801959a23961113be7fe35c954c90f0e082f77dcb8e762686c93cd';
 if (initMigrationHash !== expectedInitHash) {
-  errors.push(
-    `Baseline migration 20260922145432_init/migration.sql was altered (hash ${initMigrationHash} !== ${expectedInitHash})`,
-  );
+  const hashMismatch = `${initMigrationHash} !== ${expectedInitHash}`;
+  errors.push(`Baseline migration 20260922145432_init/migration.sql was altered (${hashMismatch})`);
 }
 
-// Verify Phase 2 & 3 schema models and fields
+// Verify Phase 2–5 schema models and fields
 const schemaText = readFileSync('apps/api/prisma/schema.prisma', 'utf8');
 const requiredSchemaTokens = [
   'model Session',
@@ -192,6 +211,29 @@ const tsFiles = allRepoFiles.filter(
     (file.endsWith('.ts') || file.endsWith('.tsx')),
 );
 
+const allowedDraftStorageFiles = new Set([
+  'apps/web/lib/arena-storage.ts',
+  'apps/web/tests/arena.test.ts',
+]);
+
+const nonArenaWebRoutes = [
+  'apps/web/app/page.tsx',
+  'apps/web/app/login/page.tsx',
+  'apps/web/app/register/page.tsx',
+  'apps/web/app/problems/page.tsx',
+  'apps/web/app/problems/[slug]/page.tsx',
+  'apps/web/app/admin/problems/page.tsx',
+];
+
+for (const routeFile of nonArenaWebRoutes) {
+  if (existsSync(routeFile)) {
+    const routeSource = readFileSync(routeFile, 'utf8');
+    if (/MonacoCodeEditor|CodeEditorLazy|monaco-editor/.test(routeSource)) {
+      errors.push(`Non-Arena route ${routeFile} must not import Monaco Editor bundles (ADR-009)`);
+    }
+  }
+}
+
 for (const tsFile of tsFiles) {
   const source = readFileSync(tsFile, 'utf8');
 
@@ -212,19 +254,32 @@ for (const tsFile of tsFiles) {
     errors.push(`Forbidden server-only import in browser-safe module ${tsFile}`);
   }
 
-  if (tsFile.startsWith('apps/web/') && /localStorage|sessionStorage/.test(source)) {
-    errors.push(`Forbidden browser storage credential usage in ${tsFile}`);
+  if (tsFile.startsWith('apps/web/') && /sessionStorage/.test(source)) {
+    errors.push(`Forbidden sessionStorage usage in ${tsFile}`);
+  }
+
+  if (
+    tsFile.startsWith('apps/web/') &&
+    !allowedDraftStorageFiles.has(tsFile) &&
+    /localStorage/.test(source)
+  ) {
+    errors.push(
+      `Direct localStorage access outside apps/web/lib/arena-storage.ts is forbidden: ${tsFile}`,
+    );
   }
 }
 
 if (errors.length > 0) {
-  console.error('DevArena foundation & Phase 3 validation failed:');
+  console.error('DevArena foundation & Phase 5 validation failed:');
   for (const err of errors) {
     console.error(`  - ${err}`);
   }
   process.exit(1);
 }
 
+const reqCount = requiredFiles.length;
+const tsCount = tsFiles.length;
+const jsonCount = jsonFiles.length;
 console.log(
-  `DevArena Phase 3 validated: ${requiredFiles.length} required files, ${tsFiles.length} TypeScript modules, ${jsonFiles.length} JSON manifests, and intact baseline migration verified with LF line endings.`,
+  `DevArena Phase 5 validated: ${reqCount} files, ${tsCount} TS modules, ${jsonCount} JSON manifests.`,
 );

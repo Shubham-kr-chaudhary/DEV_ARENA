@@ -72,22 +72,20 @@ pnpm db:migrate
 
 All environment variables are documented in `.env.example` and validated at startup by `@devarena/config`:
 
-| Variable                   | Consumer                        | Default (Development)                                    | Required in Production?                          |
-| :------------------------- | :------------------------------ | :------------------------------------------------------- | :----------------------------------------------- |
-| `NODE_ENV`                 | All                             | `development`                                            | Yes (`production`)                               |
-| `API_HOST`                 | `apps/api`                      | `127.0.0.1`                                              | Yes (`0.0.0.0` in container)                     |
-| `API_PORT`                 | `apps/api`                      | `4000`                                                   | Yes                                              |
-| `CORS_ORIGIN`              | `apps/api`                      | `http://localhost:3000`                                  | Yes (exact web origin)                           |
-| `DATABASE_URL`             | `apps/api`                      | `postgresql://devarena:devarena@localhost:5432/devarena` | Yes (RDS connection URL)                         |
-| `SESSION_SECRET`           | `apps/api`                      | Development fallback secret                              | Yes (`>= 32` random chars; placeholder rejected) |
-| `AWS_REGION`               | `apps/api`, `apps/judge-worker` | `ap-south-1`                                             | Yes                                              |
-| `SQS_QUEUE_URL`            | `apps/api`, `apps/judge-worker` | `undefined` (optional in Phase 1)                        | Yes                                              |
-| `SQS_DLQ_URL`              | `apps/api`, `apps/judge-worker` | `undefined` (optional in Phase 1)                        | Yes                                              |
-| `S3_BUCKET`                | `apps/api`                      | `undefined` (optional in Phase 1)                        | Optional until S3 uploads enabled                |
-| `WORKER_CONCURRENCY`       | `apps/judge-worker`             | `2`                                                      | Yes                                              |
-| `WORKER_POLL_WAIT_SECONDS` | `apps/judge-worker`             | `20`                                                     | Yes                                              |
-| `WORKER_HEALTH_PORT`       | `apps/judge-worker`             | `4001`                                                   | Yes                                              |
-| `NEXT_PUBLIC_API_BASE_URL` | `apps/web`                      | `http://localhost:4000`                                  | Yes                                              |
+- Variable: `NODE_ENV` — Consumer: All — Default (Development): `development` — Required in Production?: Yes (`production`)
+- Variable: `API_HOST` — Consumer: `apps/api` — Default (Development): `127.0.0.1` — Required in Production?: Yes (`0.0.0.0` in container)
+- Variable: `API_PORT` — Consumer: `apps/api` — Default (Development): `4000` — Required in Production?: Yes
+- Variable: `CORS_ORIGIN` — Consumer: `apps/api` — Default (Development): `http://localhost:3000` — Required in Production?: Yes (exact web origin)
+- Variable: `DATABASE_URL` — Consumer: `apps/api` — Default (Development): `postgresql://devarena:devarena@localhost:5432/devarena` — Required in Production?: Yes (RDS connection URL)
+- Variable: `SESSION_SECRET` — Consumer: `apps/api` — Default (Development): Development fallback secret — Required in Production?: Yes (`>= 32` random chars; placeholder rejected)
+- Variable: `AWS_REGION` — Consumer: `apps/api`, `apps/judge-worker` — Default (Development): `ap-south-1` — Required in Production?: Yes
+- Variable: `SQS_QUEUE_URL` — Consumer: `apps/api`, `apps/judge-worker` — Default (Development): `undefined` (optional in Phase 1) — Required in Production?: Yes
+- Variable: `SQS_DLQ_URL` — Consumer: `apps/api`, `apps/judge-worker` — Default (Development): `undefined` (optional in Phase 1) — Required in Production?: Yes
+- Variable: `S3_BUCKET` — Consumer: `apps/api` — Default (Development): `undefined` (optional in Phase 1) — Required in Production?: Optional until S3 uploads enabled
+- Variable: `WORKER_CONCURRENCY` — Consumer: `apps/judge-worker` — Default (Development): `2` — Required in Production?: Yes
+- Variable: `WORKER_POLL_WAIT_SECONDS` — Consumer: `apps/judge-worker` — Default (Development): `20` — Required in Production?: Yes
+- Variable: `WORKER_HEALTH_PORT` — Consumer: `apps/judge-worker` — Default (Development): `4001` — Required in Production?: Yes
+- Variable: `NEXT_PUBLIC_API_BASE_URL` — Consumer: `apps/web` — Default (Development): `http://localhost:4000` — Required in Production?: Yes
 
 Never commit `.env`, `apps/api/.env`, or real credentials to Git.
 

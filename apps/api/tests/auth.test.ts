@@ -252,7 +252,7 @@ describe('Argon2id RFC 9106 cryptographic verification & password hashing', () =
     );
   });
 
-  it('hashes passwords with Argon2id ($argon2id$v=19$...) and verifies in constant time', async () => {
+  it('hashes passwords with Argon2id and verifies them in constant time', async () => {
     const plain = 'S3cure-P@ssw0rd-For-DevArena!';
     const hashed = await hashPassword(plain);
 
@@ -268,7 +268,7 @@ describe('Argon2id RFC 9106 cryptographic verification & password hashing', () =
 });
 
 describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting', () => {
-  it('registers a valid user, stores Argon2id password hash and SHA-256 session token hash, and never leaks secrets', async () => {
+  it('registers a valid user, hashes password and session token, and hides secrets', async () => {
     const store = createInMemoryAuthRepository();
     const app = createApp({
       userRepository: store.port,
@@ -315,8 +315,9 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
 
     const rawToken = extractSessionTokenFromCookieHeader(setCookieHeader);
     expect(rawToken).toBeTruthy();
-    expect(store.sessionsByTokenHash.has(rawToken!)).toBe(false); // Raw token is NOT in DB
-    expect(store.sessionsByTokenHash.has(hashSessionToken(rawToken!))).toBe(true); // Only SHA-256 hash is in DB
+    // Raw token is NOT stored in DB; only its SHA-256 hash is persisted
+    expect(store.sessionsByTokenHash.has(rawToken!)).toBe(false);
+    expect(store.sessionsByTokenHash.has(hashSessionToken(rawToken!))).toBe(true);
   });
 
   it('sets Secure cookie attribute when NODE_ENV=production', async () => {
@@ -388,7 +389,7 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
     expect(dupJson.error.code).toBe('CONFLICT');
   });
 
-  it('authenticates login, prevents account enumeration on failures, and transparently upgrades seed scrypt hashes to Argon2id', async () => {
+  it('authenticates login, prevents enumeration, and upgrades seed scrypt hashes', async () => {
     const store = createInMemoryAuthRepository();
     const now = new Date('2026-10-17T12:00:00.000Z');
     const seededId = randomUUID();
@@ -447,7 +448,7 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
     expect(store.usersById.get(seededId)?.passwordHash?.startsWith('$argon2id$v=19$')).toBe(true);
   });
 
-  it('resolves current user on GET /me, revokes session on POST /logout, and rejects expired, revoked, or suspended sessions', async () => {
+  it('resolves user on GET /me, revokes on POST /logout, and blocks invalid sessions', async () => {
     const store = createInMemoryAuthRepository();
     let currentClock = new Date('2026-10-17T12:00:00.000Z');
 
@@ -529,7 +530,7 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
     expect(afterLogoutRes.status).toBe(401);
   });
 
-  it('enforces RBAC (USER vs ADMIN), ignores forged client role/ID claims, and blocks IDOR attempts', async () => {
+  it('enforces RBAC, ignores forged client role/ID claims, and blocks IDOR attempts', async () => {
     const store = createInMemoryAuthRepository();
     const app = createApp({ userRepository: store.port });
 
@@ -633,7 +634,7 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
     expect(adminInspectBRes.status).toBe(200);
   });
 
-  it('enforces rate limiting (429), ignores spoofed X-Forwarded-For when TRUST_PROXY=false, blocks CSRF, and masks database errors (500)', async () => {
+  it('enforces rate limits (429), ignores spoofed proxy IPs, and blocks CSRF', async () => {
     const store = createInMemoryAuthRepository();
     const rateLimitStore = new InMemorySlidingWindowRateLimitStore();
 
@@ -669,7 +670,7 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
     });
     expect(formContentTypeRes.status).toBe(403);
 
-    // 2. Rate limiting triggers 429 on 4th login attempt even if attacker rotates X-Forwarded-For (TRUST_PROXY=false)
+    // 2. Rate limiting triggers 429 on 4th login attempt even if attacker rotates X-Forwarded-For
     for (let i = 1; i <= 3; i++) {
       const res = await app.request('/api/v1/auth/login', {
         method: 'POST',
@@ -699,7 +700,7 @@ describe('Phase 3 Authentication, Sessions, RBAC, IDOR, CSRF, and Rate Limiting'
     expect(throttledRes.status).toBe(429);
     expect(throttledRes.headers.get('retry-after')).toBeTruthy();
 
-    // 3. Database failure returns safe 500 INTERNAL_ERROR without leaking connection strings or stack traces
+    // 3. Database failure returns safe 500 INTERNAL_ERROR without leaking connection strings
     rateLimitStore.reset();
     store.setDatabaseFailure(true);
 

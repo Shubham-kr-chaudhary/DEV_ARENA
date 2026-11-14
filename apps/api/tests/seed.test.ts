@@ -36,7 +36,7 @@ describe('Development seed script (prisma/seed.ts)', () => {
     expect(hash1).not.toContain('devarena-local-dev-password');
   });
 
-  it('is idempotent across repeated invocations and seeds both public and hidden test cases', async () => {
+  it('is idempotent across repeated runs and seeds public and hidden test cases', async () => {
     const usersByEmail = new Map<string, { id: string; email: string }>();
     const profilesByUserId = new Map<string, { id: string; username: string }>();
     const languagesBySlug = new Map<string, { id: string; slug: string }>();
@@ -75,7 +75,10 @@ describe('Development seed script (prisma/seed.ts)', () => {
           if (existing) {
             return existing;
           }
-          const created = { id: `profile-${profilesByUserId.size + 1}`, username: create.username };
+          const created = {
+            id: `profile-${profilesByUserId.size + 1}`,
+            username: create.username,
+          };
           profilesByUserId.set(where.userId, created);
           return created;
         },

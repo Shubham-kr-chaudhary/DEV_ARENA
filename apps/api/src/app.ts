@@ -15,25 +15,30 @@ import {
 import {
   assertOwnershipOrAdmin,
   createCsrfProtectionMiddleware,
+  createOptionalAuthMiddleware,
   createRequireAdminMiddleware,
   createRequireAuthMiddleware,
   InMemorySlidingWindowRateLimitStore,
   requireAuthenticatedStateFromContext,
   type RateLimitStore,
 } from './middleware/index.js';
-import { UserRepository } from './repositories/index.js';
+import { ProblemRepository, UserRepository } from './repositories/index.js';
+import { createAdminProblemRoutes } from './routes/v1/admin-problems.routes.js';
 import { createAuthRoutes } from './routes/v1/auth.routes.js';
+import { createProblemRoutes } from './routes/v1/problems.routes.js';
 import {
   AuthService,
   formatAuthenticatedUserDto,
   type AuthUserRepositoryPort,
 } from './services/auth.service.js';
+import { ProblemService, type ProblemRepositoryPort } from './services/problem.service.js';
 
 const MAX_REQUEST_BODY_BYTES = 128 * 1024; // 128 KB
 
 export interface AppDependencies {
   readonly checkDatabaseReadiness?: (() => Promise<boolean>) | undefined;
   readonly userRepository?: AuthUserRepositoryPort | undefined;
+  readonly problemRepository?: ProblemRepositoryPort | undefined;
   readonly config?: Partial<ServerConfig> | undefined;
   readonly rateLimitStore?: RateLimitStore | undefined;
   readonly nowFn?: (() => Date) | undefined;
@@ -46,6 +51,10 @@ async function defaultDatabaseReadinessCheck(): Promise<boolean> {
 
 function getDefaultUserRepository(): AuthUserRepositoryPort {
   return new UserRepository(getPrismaClient());
+}
+
+function getDefaultProblemRepository(): ProblemRepositoryPort {
+  return new ProblemRepository(getPrismaClient());
 }
 
 export function createApp(dependencies: AppDependencies = {}): Hono {
@@ -86,11 +95,41 @@ export function createApp(dependencies: AppDependencies = {}): Hono {
       getUserRepo().revokeSessionByTokenHash(tokenHash, revokedAt),
   };
 
+  let resolvedProblemRepository: ProblemRepositoryPort | undefined = dependencies.problemRepository;
+  const getProblemRepo = (): ProblemRepositoryPort => {
+    if (!resolvedProblemRepository) {
+      resolvedProblemRepository = getDefaultProblemRepository();
+    }
+    return resolvedProblemRepository;
+  };
+
+  const lazyProblemRepositoryPort: ProblemRepositoryPort = {
+    listAllTags: () => getProblemRepo().listAllTags(),
+    listActiveLanguages: () => getProblemRepo().listActiveLanguages(),
+    listPublishedProblems: (filter, pagination) =>
+      getProblemRepo().listPublishedProblems(filter, pagination),
+    findPublishedProblemBySlug: (slug, options) =>
+      getProblemRepo().findPublishedProblemBySlug(slug, options),
+    listProblemsForAdmin: (actor, filter, pagination) =>
+      getProblemRepo().listProblemsForAdmin(actor, filter, pagination),
+    findProblemByIdForAdmin: (actor, problemId) =>
+      getProblemRepo().findProblemByIdForAdmin(actor, problemId),
+    createProblemForAdmin: (actor, input) => getProblemRepo().createProblemForAdmin(actor, input),
+    updateProblemForAdmin: (actor, problemId, input) =>
+      getProblemRepo().updateProblemForAdmin(actor, problemId, input),
+    replaceProblemTestCasesForAdmin: (actor, problemId, testCases) =>
+      getProblemRepo().replaceProblemTestCasesForAdmin(actor, problemId, testCases),
+    transitionProblemStatusForAdmin: (actor, problemId, targetStatus) =>
+      getProblemRepo().transitionProblemStatusForAdmin(actor, problemId, targetStatus),
+  };
+
   const authService = new AuthService({
     userRepository: lazyUserRepositoryPort,
     sessionTtlSeconds: config.SESSION_TTL_SECONDS,
     nowFn: dependencies.nowFn,
   });
+
+  const problemService = new ProblemService(lazyProblemRepositoryPort);
 
   const sessionResolverDeps = {
     findActiveSessionByTokenHash: (tokenHash: string, now?: Date) =>
@@ -102,6 +141,7 @@ export function createApp(dependencies: AppDependencies = {}): Hono {
     nowFn: dependencies.nowFn,
   };
 
+  const optionalAuthMiddleware = createOptionalAuthMiddleware(sessionResolverDeps);
   const requireAuthMiddleware = createRequireAuthMiddleware(sessionResolverDeps);
   const requireAdminMiddleware = createRequireAdminMiddleware(sessionResolverDeps);
   const csrfMiddleware = createCsrfProtectionMiddleware({
@@ -120,7 +160,7 @@ export function createApp(dependencies: AppDependencies = {}): Hono {
     if (requestOrigin && requestOrigin === config.CORS_ORIGIN) {
       c.header('Access-Control-Allow-Origin', config.CORS_ORIGIN);
       c.header('Access-Control-Allow-Credentials', 'true');
-      c.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+      c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       c.header('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key');
       c.header('Vary', 'Origin');
     }
@@ -210,6 +250,14 @@ export function createApp(dependencies: AppDependencies = {}): Hono {
     }),
   );
 
+  app.route(
+    '/api/v1/problems',
+    createProblemRoutes({
+      problemService,
+      optionalAuthMiddleware,
+    }),
+  );
+
   app.get('/api/v1/users/:userId/account', requireAuthMiddleware, async (c) => {
     const authState = requireAuthenticatedStateFromContext(c);
     const targetUserId = c.req.param('userId');
@@ -239,6 +287,13 @@ export function createApp(dependencies: AppDependencies = {}): Hono {
       200,
     );
   });
+
+  app.route(
+    '/api/v1/admin/problems',
+    createAdminProblemRoutes({
+      problemService,
+    }),
+  );
 
   app.notFound((c) => {
     const requestId = c.get('requestId' as never) as string | undefined;
